@@ -17,7 +17,7 @@ def build_vocab():
     vocab['UNKNOWN'] = code
     code += 1
     #/export/jw/cnn/insuranceQA/
-    for line in open('train'):
+    for line in open('datasets/train'):
         items = line.strip().split(' ')
         for i in range(2, 3):
             words = items[i].split('_')
@@ -25,7 +25,7 @@ def build_vocab():
                 if not word in vocab:
                     vocab[word] = code
                     code += 1
-    for line in open('test1'):
+    for line in open('datasets/test1'):
         items = line.strip().split(' ')
         for i in range(2, 3):
             words = items[i].split('_')
@@ -41,9 +41,16 @@ def rand_qa(qalist):
 
 def read_alist():
     alist = []
-    for line in open('train'):
+    i = 0
+    for line in open('datasets/train'):
         items = line.strip().split(' ')
+        #print(items)
         alist.append(items[3])
+        #print(alist)
+        i += 1
+        print(i)
+
+
     print('read_alist done ......')
     return alist
 
@@ -74,7 +81,7 @@ def vocab_plus_overlap(vectors, sent, over, size):
 
 def load_vectors():
     vectors = {}
-    for line in open('vectors.nobin'):
+    for line in open('datasets/vectors.nobin'):
         items = line.strip().split(' ')
         if (len(items) < 101):
             continue
@@ -94,7 +101,7 @@ def read_vector(vectors, word):
 
 def load_test_and_vectors():
     testList = []
-    for line in open('test1'):
+    for line in open('datasets/test1'):
         testList.append(line.strip())
     vectors = load_vectors()
     return testList, vectors
@@ -118,7 +125,7 @@ def load_data_val_10(testList, vectors, index):
 
 def read_raw():
     raw = []
-    for line in open('train'):
+    for line in open('datasets/train'):
         items = line.strip().split(' ')
         if items[0] == '1':
             raw.append(items)
@@ -143,7 +150,9 @@ def load_data_6(vocab, alist, raw, size):
         nega = rand_qa(alist)
         x_train_1.append(encode_sent(vocab, items[2], 100))
         x_train_2.append(encode_sent(vocab, items[3], 100))
+
         x_train_3.append(encode_sent(vocab, nega, 100))
+
     return np.array(x_train_1), np.array(x_train_2), np.array(x_train_3)
 
 def load_data_val_6(testList, vocab, index, batch):

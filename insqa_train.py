@@ -22,7 +22,7 @@ tf.flags.DEFINE_float("dropout_keep_prob", 1.0, "Dropout keep probability (defau
 tf.flags.DEFINE_float("l2_reg_lambda", 0, "L2 regularizaion lambda (default: 0.0)")
 
 # Training parameters
-tf.flags.DEFINE_integer("batch_size", 50, "Batch Size (default: 64)")
+tf.flags.DEFINE_integer("batch_size", 100, "Batch Size (default: 64)")
 tf.flags.DEFINE_integer("num_epochs", 5000000, "Number of training epochs (default: 200)")
 tf.flags.DEFINE_integer("evaluate_every", 3000, "Evaluate model on dev set after this many steps (default: 100)")
 tf.flags.DEFINE_integer("checkpoint_every", 3000, "Save model after this many steps (default: 100)")
@@ -47,14 +47,13 @@ vocab = insurance_qa_data_helpers.build_vocab()
 alist = insurance_qa_data_helpers.read_alist()
 raw = insurance_qa_data_helpers.read_raw()
 x_train_1, x_train_2, x_train_3 = insurance_qa_data_helpers.load_data_6(vocab, alist, raw, FLAGS.batch_size)
-#train-1 问题,train2 答案 train3 negative 答案
 testList, vectors = insurance_qa_data_helpers.load_test_and_vectors()
 vectors = ''
 print('x_train_1', np.shape(x_train_1))
 print("Load done...")
 
-#val_file = '/export/jw/cnn/insuranceQA/test1'
-#precision = '/export/jw/cnn/insuranceQA/test1.acc'
+val_file = '/export/jw/cnn/insuranceQA/test1'
+precision = '/export/jw/cnn/insuranceQA/test1.acc'
 #x_val, y_val = data_deepqa.load_data_val()
 
 # Training

@@ -1,5 +1,10 @@
 import  tensorflow as tf
 # weight initialization with decay
+QUESTION_LEN = 100
+EMBEDDING_SIZE = 200
+BATCH_SIZE = 100
+
+
 def weight_variable(shape, wd):
     initial = tf.truncated_normal(shape, stddev=0.1)
     if wd:
@@ -14,6 +19,7 @@ def weight_variable(shape):
 
 def bias_variable(shape):
     initial = tf.constant(0.1, shape=shape)
+
     return tf.Variable(initial)
 
 

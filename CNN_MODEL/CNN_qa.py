@@ -1,119 +1,91 @@
 import tensorflow as tf
 
-from utility.Model_Parameter import *
-from utility.Global_definition import *
+from Utility.Model_Parameter import *
 
 
 
-
-class InsQACNN(object):
-    def __init__(self, vocab_size, sentence_length, batch_size, words_length_for_filters, embedding_size, kernel_maps):
-        #1:question,2:answer,3:negative answer
-        self.input_x_1 = tf.placeholder(tf.int32, [batch_size, sentence_length])
-        self.input_x_2 = tf.placeholder(tf.int32, [batch_size, sentence_length])
-        self.input_x_3 = tf.placeholder(tf.int32, [batch_size, sentence_length])
-        #weights,also know as word embbeding
-        weights_1 = tf.Variable(tf.random_uniform([vocab_size, embedding_size], -1.0, 1.0),)
-
-        self.word_embedding_1 = tf.nn.embedding_lookup(weights_1, self.input_x_1)
-        self.word_embedding_2 = tf.nn.embedding_lookup(weights_1, self.input_x_2)
-        self.word_embedding_3 = tf.nn.embedding_lookup(weights_1, self.input_x_3)
-        pooled_outputs_1 = []
-        pooled_outputs_2 = []
-        pooled_outputs_3 = []
+words_filters_lens = [1,2,3,5]
+ouput_features = 500
 
 
-        for i, words_length_for_filter in enumerate(words_length_for_filters):
-            kernel= [words_length_for_filter, embedding_size, 1, kernel_maps]
-            weights_cnn = weight_variable(kernel)
-            b = bias_variable(kernel_maps)
 
-            # question
-            conv = conv_p_valid(self.word_embedding_1,weights_cnn)
-            h = tf.nn.relu(tf.nn.bias_add(conv,b))
-            pooled_outputs_1.append(max_pool_1x1(h, [1, words_length_for_filter - kernel_maps + 1, 1, 1]))
+def inference(q,a,n,vocab_size,embedding_size,questionlen):
+    W1 = tf.Variable(
+        tf.random_uniform([vocab_size, embedding_size], -1.0, 1.0))
+    q = tf.expand_dims(tf.nn.embedding_lookup(W1,q),-1)
+    a = tf.expand_dims(tf.nn.embedding_lookup(W1,a),-1)
+    n = tf.expand_dims(tf.nn.embedding_lookup(W1,n),-1)
 
-            #answer
-            h = tf.nn.relu(tf.nn.bias_add(conv_p_valid(self.word_embedding_2,weights_cnn)),b)
-            pooled_outputs_2.append(max_pool_1x1(h, [1, words_length_for_filter - kernel_maps + 1, 1, 1]))
+    pool_q = []
+    pool_a = []
+    pool_n = []
 
-            #negative
-            h = tf.nn.relu(tf.nn.bias_add(conv_p_valid(self.word_embedding_3,weights_cnn)),b)
-            pooled_outputs_3.append(max_pool_1x1(h, [1, words_length_for_filter - kernel_maps + 1, 1, 1]))
+    kernels = [[words_filters_lens[0],EMBEDDING_SIZE,1,ouput_features],
+               [words_filters_lens[1],EMBEDDING_SIZE,1,ouput_features],
+               [words_filters_lens[2],EMBEDDING_SIZE,1,ouput_features],
+               [words_filters_lens[3],EMBEDDING_SIZE,1,ouput_features]]
 
 
-##
-#L1 inlucde 2 models,  predict the postion of  two eyes centre by
-#using the whole image of face and the half whole image.
-kernel_sizes = [1,2,3,5]
 
-input_channel = 1
-kernel_maps_1= 500
-kernel_maps_2= 64
-kernel_maps_3= 128
-kernel_maps_4= 256
-kernel_maps_5= 512
+    for i in  range(len(kernels)):
+        W = weight_variable(kernels[i])
+        b = tf.Variable(tf.constant(0.1, shape=[ouput_features]))
 
-# 0 :pool,parameter of weights,after pool
+        #b = bias_variable(ouput_features)
+        conv_q =  tf.nn.conv2d(q,W,strides=[1,1,1,1],padding='VALID')
+        activation = tf.nn.relu(tf.nn.bias_add(conv_q,b))
+        pool =  tf.nn.max_pool(activation,ksize=[1,questionlen - words_filters_lens[i]+ 1 ,1,1],strides=[1,1,1,1],padding='VALID')
+        pool_q.append(pool)
 
-fc_para_1 = 512
-fc_para_2 = 512
-label_szie = 4
+        conv_a = tf.nn.conv2d(a, W, strides=[1, 1, 1, 1], padding='VALID')
+        activation = tf.nn.relu(tf.nn.bias_add(conv_a, b))
+        pool = tf.nn.max_pool(activation, ksize=[1, questionlen - words_filters_lens[i] +  1, 1, 1], strides=[1, 1, 1, 1],padding='VALID')
+        pool_a.append(pool)
+
+        conv_n = tf.nn.conv2d(n, W, strides=[1, 1, 1, 1], padding='VALID')
+        activation = tf.nn.relu(tf.nn.bias_add(conv_n, b))
+        pool = tf.nn.max_pool(activation, ksize=[1, questionlen - words_filters_lens[i] +  1, 1, 1], strides=[1, 1, 1, 1],padding='VALID')
+        pool_n.append(pool)
+    num_kernels_total = ouput_features * len(kernels)
+    pool_q = tf.reshape(tf.concat(3, pool_q), [-1, num_kernels_total])
+    pool_a = tf.reshape(tf.concat(3, pool_a), [-1, num_kernels_total])
+    pool_n = tf.reshape(tf.concat(3, pool_n), [-1, num_kernels_total])
+    return pool_q,pool_a,pool_n
 
 
 
 
 
-def build_deep_cnn(input_datas,kernels,is_training):
-    weight  = weight_variable(kernels)
-    bias    = bias_variable([kernels[3]])
-    conv_ = tf.nn.bias_add(conv(input_datas, weight), bias)
-    bn_conv = norm_layer(conv_, is_training)
-    pool = max_pool_2x2(tf.nn.relu(bn_conv))
-    return pool
+#q:question,a:answer,ne:negative answer
+def loss(q,a,ne):
+    len_q = tf.sqrt(tf.reduce_sum(tf.mul(q, q), 1))  # 计算向量长度,Batch模式
+    len_a = tf.sqrt(tf.reduce_sum(tf.mul(a, a), 1))
+    len_ne = tf.sqrt(tf.reduce_sum(tf.mul( ne, ne), 1))
+    dot_12 = tf.reduce_sum(tf.mul(q, a), 1)  # 计算向量的点乘,Batch模式
+    dot_13 = tf.reduce_sum(tf.mul(q, ne), 1)
 
-def build_deep_fc(input_datas,shape,is_training,keep_prob):
-        weight = weight_variable(shape)
-        bias = bias_variable([shape[1]])
-        z = tf.matmul(input_datas, weight) + bias
-        bn_fc= norm_layer(z, is_training)
-        fc = tf.nn.dropout(tf.nn.relu(bn_fc), keep_prob)
-        return fc
+    cos_12 = tf.div(dot_12, tf.mul(len_q, len_a))  # 计算向量夹角,Batch模式
+    cos_13 = tf.div(dot_13, tf.mul(len_q, len_ne))
 
-
-filter_shape = [filter_size, embedding_size, 1, num_filters]
-W = tf.Variable(tf.truncated_normal(filter_shape, stddev=0.1), name="W")
-b = tf.Variable(tf.constant(0.1, shape=[num_filters]), name="b")
-
-def cnn_model():
-    for i, kernel_size in enumerate(kernel_sizes):
-        kernel_shape = [kernel_size, embedding_size, 1, kernel_maps_1]
+    zero = tf.constant(0, shape=[BATCH_SIZE], dtype=tf.float32)
+    margin = tf.constant(0.05, shape=[BATCH_SIZE], dtype=tf.float32)
+    losses = tf.maximum(zero, tf.sub(margin, tf.sub(cos_12, cos_13)))
+    loss_value = tf.reduce_sum(losses)
+    return loss_value
 
 
-def L1_model_with_bn(input_datas, keep_prob,is_training):
-    #reshape if nedd
-    kernels = [[3, 3, input_channel, kernel_maps_1],
-               [3, 3, kernel_maps_1, kernel_maps_2],
-               [3, 3, kernel_maps_2, kernel_maps_3],
-               [3, 3, kernel_maps_3, kernel_maps_4],
-               [3, 3, kernel_maps_4, kernel_maps_5]]
-    number_kernels = len(kernels)
-    input_layer = tf.reshape(input_datas,[-1,IMAGE_INPUT_HEIGH,IMAGE_INPUT_WIDTH,input_channel])
-    for i in range(number_kernels):
-        input_layer = build_deep_cnn(input_layer,kernels[i],is_training)
+def train_in_cnn(loss_op):
+    train_step = tf.train.AdamOptimizer(learning_rate=1e-3).minimize(loss_op)
+    return train_step
 
-    #full connect
-    fc_para_0 = IMAGE_INPUT_HEIGH //2**(number_kernels)* IMAGE_INPUT_WIDTH // 2**(number_kernels)   * kernel_maps_5
-    fc_weigths = [[fc_para_0,fc_para_1],[fc_para_1,fc_para_2]]
-    input_fc = tf.reshape(input_layer,[-1, fc_weigths[0][0]])
-    for i in range(len(fc_weigths)):
-        input_fc = build_deep_fc(input_fc,fc_weigths[i],is_training,keep_prob)
 
-    #last
-    fc_w = weight_variable([512, 4])
-    fc_b = bias_variable([4])
-    labels = tf.matmul(input_fc, fc_w) + fc_b
 
-    return labels
+
+
+
+
+
+
+
 
 
